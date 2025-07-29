@@ -96,8 +96,8 @@ namespace AutoGame
 
                 // Tạo combo theo yêu cầu
                 int jumpRightCount = rand.Next(7, 11); // 4–8
-                int wCount = rand.Next(2, 5);         // 4–6
-                int qCount = rand.Next(2, 3);         // 4–6
+                int wCount = rand.Next(5, 8);         // 4–6
+                int qCount = rand.Next(4, 6);         // 4–6
 
                 List<string> combo = new List<string>();
 
@@ -129,7 +129,7 @@ namespace AutoGame
 
                 // Thỉnh thoảng chèn "s"
                 sCounter++;
-                if (sCounter == 2)
+                if (sCounter == 1)
                 {
                     combo.Add("s")  ;
                     sCounter = 0;
