@@ -36,6 +36,7 @@
             domainUpDown1 = new DomainUpDown();
             label1 = new Label();
             textBox1 = new TextBox();
+            comboBox1 = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
@@ -79,7 +80,7 @@
             dataGridView1.Margin = new Padding(3, 2, 3, 2);
             dataGridView1.Name = "dataGridView1";
             dataGridView1.RowHeadersWidth = 51;
-            dataGridView1.Size = new Size(679, 196);
+            dataGridView1.Size = new Size(679, 193);
             dataGridView1.TabIndex = 3;
             // 
             // button4
@@ -118,11 +119,20 @@
             textBox1.TabIndex = 7;
             textBox1.Text = "COM4";
             // 
+            // comboBox1
+            // 
+            comboBox1.FormattingEnabled = true;
+            comboBox1.Location = new Point(7, 271);
+            comboBox1.Name = "comboBox1";
+            comboBox1.Size = new Size(100, 23);
+            comboBox1.TabIndex = 8;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(700, 338);
+            Controls.Add(comboBox1);
             Controls.Add(textBox1);
             Controls.Add(label1);
             Controls.Add(domainUpDown1);
@@ -149,5 +159,6 @@
         private DomainUpDown domainUpDown1;
         private Label label1;
         private TextBox textBox1;
+        private ComboBox comboBox1;
     }
 }

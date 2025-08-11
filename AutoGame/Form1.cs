@@ -16,6 +16,7 @@ namespace AutoGame
             InitializeComponent();
             folderPath = AppDomain.CurrentDomain.BaseDirectory;
             filePath = Path.Combine(folderPath, "output.json");
+            this.Load += Form1_Load;
         }
         List<KeyAction> recordedActions = new List<KeyAction>();
         Stopwatch timer = new Stopwatch();
@@ -34,6 +35,18 @@ namespace AutoGame
                 Key = e.KeyCode,
                 IsKeyDown = true,
                 TimeOffset = timer.Elapsed
+            });
+        }
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            Task.Run(() =>
+            {
+                var list = new List<string> { "luadoc", "sung" };
+
+                this.Invoke((MethodInvoker)(() =>
+                {
+                    comboBox1.DataSource = list;
+                }));
             });
         }
 
@@ -68,7 +81,11 @@ namespace AutoGame
         }
         public void Run(SerialPort port)
         {
-
+            string selected = string.Empty;
+            this.Invoke((MethodInvoker)(() =>
+            {
+                selected = comboBox1.SelectedValue?.ToString();
+            }));
 
             // Gán 1 lần duy nhất sự kiện nhận dữ liệu
             port.DataReceived += (sender, e) =>
@@ -85,72 +102,148 @@ namespace AutoGame
             int s = 0;
             int isJump_left = 0;
             var sCounter = 0;
-            for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
+            if (selected == "luadoc")
             {
-                if (isCancelled)
-                {
-                    port.Close();
-                    break;
-                }
-                s++;
-
-                // Tạo combo theo yêu cầu
-                int jumpRightCount = rand.Next(7, 11); // 4–8
-                int wCount = rand.Next(5, 8);         // 4–6
-                int qCount = rand.Next(4, 6);         // 4–6
-
-                List<string> combo = new List<string>();
-
-                // Thêm JUMP_RIGHT
-                if (isJump_left % 2 == 1)
-                {
-                    for (int i = 0; i < jumpRightCount; i++)
-                        combo.Add("JUMP_RIGHT");
-                    isJump_left++;
-                }
-                else
-                {
-                    for (int i = 0; i < jumpRightCount; i++)
-                        combo.Add("JUMP_LEFT");
-                    isJump_left++;
-                }
-
-                // Thêm w
-                for (int i = 0; i < wCount; i++)
-                    combo.Add("w");
-
-                // Thêm q
-                for (int i = 0; i < qCount; i++)
-                    combo.Add("q");
-
-                // Trộn ngẫu nhiên thứ tự combo
-                combo = combo.OrderBy(x => rand.Next()).ToList();
-
-
-                // Thỉnh thoảng chèn "s"
-                sCounter++;
-                if (sCounter == 1)
-                {
-                    combo.Add("s")  ;
-                    sCounter = 0;
-                }
-                foreach (var key in combo)
+                for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
                 {
                     if (isCancelled)
                     {
                         port.Close();
                         break;
                     }
+                    s++;
 
+                    // Tạo combo theo yêu cầu 
+                    int jumpRightCount = rand.Next(4, 6); // 4–8
+                    int wCount = rand.Next(10, 13);         // 4–6
+                    int qCount = rand.Next(6, 8);         // 4–6
 
-                    int delay = rand.Next(500, 1000); // delay ngẫu nhiên 0.5–1s
-                    Thread.Sleep(delay);
-                    port.WriteLine(key);
-                    Console.WriteLine(">> Sent: " + key);
-                    actions.Add(key);
+                    List<string> combo = new List<string>();
+
+                    // Thêm JUMP_RIGHT
+                    if (isJump_left % 2 == 1)
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                            combo.Add("JUMP_RIGHT");
+                        isJump_left++;
+                    }
+                    else
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                            combo.Add("JUMP_LEFT");
+                        isJump_left++;
+                    }
+
+                    // Thêm w
+                    for (int i = 0; i < wCount; i++)
+                        combo.Add("w");
+
+                    // Thêm q
+                    for (int i = 0; i < qCount; i++)
+                        combo.Add("q");
+
+                    // Trộn ngẫu nhiên thứ tự combo
+
+                    sCounter++;
+                    if (sCounter == 1)
+                    {
+                        combo.Add("s");
+                        combo.Add("JUMP_UP");
+                        combo.Add("A");
+                        combo.Add("D");
+                        sCounter = 0;
+                    }
+                    combo = combo.OrderBy(x => rand.Next()).ToList();
+                    foreach (var key in combo)
+                    {
+                        if (isCancelled)
+                        {
+                            port.Close();
+                            break;
+                        }
+                        // Thỉnh thoảng chèn "s"
+
+                        int delay = rand.Next(200, 400); // delay ngẫu nhiên 0.5–1s
+                        Thread.Sleep(delay);
+                        port.WriteLine(key);
+                        Console.WriteLine(">> Sent: " + key);
+                        actions.Add(key);
+                    }
+
+                    Thread.Sleep(100); // giữ nhịp vòng lặp đủ chậm để đồng hồ hoạt động chính xác
                 }
 
-                Thread.Sleep(100); // giữ nhịp vòng lặp đủ chậm để đồng hồ hoạt động chính xác
+            }
+            else
+            {
+                for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
+                {
+                    if (isCancelled)
+                    {
+                        port.Close();
+                        break;
+                    }
+                    s++;
+
+                    // Tạo combo theo yêu cầu 
+                    int jumpRightCount = rand.Next(4, 5); // 4–8
+                    int wCount = rand.Next(3, 4);         // 4–6
+                    int qCount = rand.Next(1, 4);         // 4–6
+
+                    List<string> combo = new List<string>();
+
+                    // Thêm JUMP_RIGHT
+                    if (isJump_left % 2 == 1)
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                            combo.Add("JUMP_RIGHT_SUNG");
+                        isJump_left++;
+                    }
+                    else
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                            combo.Add("JUMP_LEFT_SUNG");
+                        isJump_left++;
+                    }
+
+                    // Thêm w
+                    for (int i = 0; i < wCount; i++)
+                        combo.Add("w");
+                    // Thêm q
+                    for (int i = 0; i < qCount; i++)
+                        combo.Add("q");
+                    for (int i = 0; i < qCount; i++)
+                        combo.Add("A");
+
+                    // Trộn ngẫu nhiên thứ tự combo
+                    combo = combo.OrderBy(x => rand.Next()).ToList();
+
+                    sCounter++;
+                    if (sCounter == 5)
+                    {
+                        combo.Add("s");
+
+                        sCounter = 0;
+                    }
+                    foreach (var key in combo)
+                    {
+                        if (isCancelled)
+                        {
+                            port.Close();
+                            break;
+                        }
+                        // Thỉnh thoảng chèn "s"
+
+                        int delay = rand.Next(200, 400); // delay ngẫu nhiên 0.5–1s
+                        Thread.Sleep(delay);
+                        port.WriteLine(key);
+                        Console.WriteLine(">> Sent: " + key);
+                        actions.Add(key);
+                    }
+
+                    Thread.Sleep(100); // giữ nhịp vòng lặp đủ chậm để đồng hồ hoạt động chính xác
+                }
+
             }
 
             port.Close();

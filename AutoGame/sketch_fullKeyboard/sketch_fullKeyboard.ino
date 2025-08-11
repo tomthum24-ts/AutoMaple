@@ -85,7 +85,18 @@ void pressKey(String key) {
     delay(100);
     Keyboard.release(KEY_LEFT_ARROW);
   }
-   
+  else if (key == "JUMP_LEFT_SUNG"){
+    Keyboard.press(KEY_LEFT_ARROW);
+    delay(100);
+    for (int i = 0; i < 2; i++) {
+    Keyboard.press(KEY_LEFT_ALT); // Nhấn Alt
+    delay(100);                   // Giữ 100ms
+    Keyboard.release(KEY_LEFT_ALT); // Thả Alt
+    delay(100);                   // Nghỉ 100ms trước lần tiếp theo
+    }
+    delay(100);
+    Keyboard.release(KEY_LEFT_ARROW);
+  } 
   else if (key == "RIGHT") Keyboard.press(KEY_RIGHT_ARROW);
   else if (key == "JUMP_RIGHT"){
     Keyboard.press(KEY_RIGHT_ARROW);
@@ -94,7 +105,18 @@ void pressKey(String key) {
     delay(100);
     Keyboard.release(KEY_RIGHT_ARROW);
   }
-  
+  else if (key == "JUMP_RIGHT_SUNG"){
+    Keyboard.press(KEY_RIGHT_ARROW);
+    delay(100);
+    for (int i = 0; i < 2; i++) {
+    Keyboard.press(KEY_LEFT_ALT); // Nhấn Alt
+    delay(100);                   // Giữ 100ms
+    Keyboard.release(KEY_LEFT_ALT); // Thả Alt
+    delay(100);                   // Nghỉ 100ms trước lần tiếp theo
+    }
+    delay(100);
+    Keyboard.release(KEY_RIGHT_ARROW);
+  }
   else if (key == "UP") Keyboard.press(KEY_UP_ARROW);
   else if (key == "DOWN") Keyboard.press(KEY_DOWN_ARROW);
   else if (key == "BACKSPACE") Keyboard.press(KEY_BACKSPACE);
@@ -132,11 +154,35 @@ void releaseKey(String key) {
     delay(100);
     Keyboard.release(KEY_LEFT_ARROW);
   }
+  else if (key == "JUMP_LEFT_SUNG"){
+    Keyboard.press(KEY_LEFT_ARROW);
+    delay(100);
+    for (int i = 0; i < 2; i++) {
+    Keyboard.press(KEY_LEFT_ALT); // Nhấn Alt
+    delay(100);                   // Giữ 100ms
+    Keyboard.release(KEY_LEFT_ALT); // Thả Alt
+    delay(100);                   // Nghỉ 100ms trước lần tiếp theo
+    }
+    delay(100);
+    Keyboard.release(KEY_LEFT_ARROW);
+  }
   else if (key == "RIGHT") Keyboard.release(KEY_RIGHT_ARROW);
   else if (key == "JUMP_RIGHT"){
     Keyboard.press(KEY_RIGHT_ARROW);
     delay(100);
     Keyboard.write('e'); // nhấn 1 lần e
+    delay(100);
+    Keyboard.release(KEY_RIGHT_ARROW);
+  }
+  else if (key == "JUMP_RIGHT_SUNG"){
+    Keyboard.press(KEY_RIGHT_ARROW);
+    delay(100);
+     for (int i = 0; i < 2; i++) {
+    Keyboard.press(KEY_LEFT_ALT); // Nhấn Alt
+    delay(100);                   // Giữ 100ms
+    Keyboard.release(KEY_LEFT_ALT); // Thả Alt
+    delay(100);                   // Nghỉ 100ms trước lần tiếp theo
+    }
     delay(100);
     Keyboard.release(KEY_RIGHT_ARROW);
   }
