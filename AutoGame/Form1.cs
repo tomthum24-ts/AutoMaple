@@ -114,9 +114,9 @@ namespace AutoGame
                     s++;
 
                     // Tạo combo theo yêu cầu 
-                    int jumpRightCount = rand.Next(4, 6); // 4–8
-                    int wCount = rand.Next(10, 13);         // 4–6
-                    int qCount = rand.Next(6, 8);         // 4–6
+                    int jumpRightCount = rand.Next(2, 3); // 4–8
+                    int wCount = rand.Next(3, 4);         // 4–6
+                    int qCount = rand.Next(3, 4);         // 4–6
 
                     List<string> combo = new List<string>();
 
@@ -163,7 +163,7 @@ namespace AutoGame
                         }
                         // Thỉnh thoảng chèn "s"
 
-                        int delay = rand.Next(200, 400); // delay ngẫu nhiên 0.5–1s
+                        int delay = rand.Next(500, 700); // delay ngẫu nhiên 0.5–1s
                         Thread.Sleep(delay);
                         port.WriteLine(key);
                         Console.WriteLine(">> Sent: " + key);
@@ -186,23 +186,28 @@ namespace AutoGame
                     s++;
 
                     // Tạo combo theo yêu cầu 
-                    int jumpRightCount = rand.Next(4, 5); // 4–8
-                    int wCount = rand.Next(3, 4);         // 4–6
-                    int qCount = rand.Next(1, 4);         // 4–6
+                    int jumpRightCount = rand.Next(3, 4); // 4–8
+                    int wCount = rand.Next(8, 12);         // 4–6
+                    int qCount = rand.Next(4, 6);         // 4–6
 
                     List<string> combo = new List<string>();
 
                     // Thêm JUMP_RIGHT
                     if (isJump_left % 2 == 1)
                     {
-                        for (int i = 0; i < jumpRightCount; i++)
+                        for (int i = 0; i < jumpRightCount; i++) {
                             combo.Add("JUMP_RIGHT_SUNG");
+                        }
+                            
                         isJump_left++;
                     }
                     else
                     {
                         for (int i = 0; i < jumpRightCount; i++)
+                        {
                             combo.Add("JUMP_LEFT_SUNG");
+                        }
+                            
                         isJump_left++;
                     }
 
@@ -212,17 +217,18 @@ namespace AutoGame
                     // Thêm q
                     for (int i = 0; i < qCount; i++)
                         combo.Add("q");
-                    for (int i = 0; i < qCount; i++)
-                        combo.Add("A");
+                    //for (int i = 0; i < qCount; i++)
+                    //    combo.Add("A");
 
                     // Trộn ngẫu nhiên thứ tự combo
                     combo = combo.OrderBy(x => rand.Next()).ToList();
 
                     sCounter++;
-                    if (sCounter == 5)
+                    if (sCounter == 3)
                     {
-                        combo.Add("s");
-
+                        combo.Add("S");
+                        combo.Add("A");
+                        combo.Add("D");
                         sCounter = 0;
                     }
                     foreach (var key in combo)
@@ -234,10 +240,11 @@ namespace AutoGame
                         }
                         // Thỉnh thoảng chèn "s"
 
-                        int delay = rand.Next(200, 400); // delay ngẫu nhiên 0.5–1s
+                        int delay = rand.Next(500, 700); // delay ngẫu nhiên 0.5–1s
                         Thread.Sleep(delay);
                         port.WriteLine(key);
                         Console.WriteLine(">> Sent: " + key);
+                        if (key == "A" || key=="S"|| key=="D") Thread.Sleep(1000);
                         actions.Add(key);
                     }
 
