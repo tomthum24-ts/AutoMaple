@@ -37,6 +37,8 @@
             label1 = new Label();
             textBox1 = new TextBox();
             comboBox1 = new ComboBox();
+            Jump = new DomainUpDown();
+            label2 = new Label();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
@@ -117,7 +119,8 @@
             textBox1.Name = "textBox1";
             textBox1.Size = new Size(100, 23);
             textBox1.TabIndex = 7;
-            textBox1.Text = "COM4";
+            textBox1.Text = "COM3";
+            textBox1.TextChanged += textBox1_TextChanged;
             // 
             // comboBox1
             // 
@@ -127,11 +130,31 @@
             comboBox1.Size = new Size(100, 23);
             comboBox1.TabIndex = 8;
             // 
+            // Jump
+            // 
+            Jump.Location = new Point(163, 270);
+            Jump.Name = "Jump";
+            Jump.Size = new Size(120, 23);
+            Jump.TabIndex = 9;
+            Jump.Text = "8";
+            // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(113, 278);
+            label2.Name = "label2";
+            label2.Size = new Size(36, 15);
+            label2.TabIndex = 10;
+            label2.Text = "Jump";
+            label2.Click += label2_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(700, 338);
+            Controls.Add(label2);
+            Controls.Add(Jump);
             Controls.Add(comboBox1);
             Controls.Add(textBox1);
             Controls.Add(label1);
@@ -160,5 +183,7 @@
         private Label label1;
         private TextBox textBox1;
         private ComboBox comboBox1;
+        private DomainUpDown Jump;
+        private Label label2;
     }
 }

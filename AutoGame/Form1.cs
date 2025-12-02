@@ -41,7 +41,7 @@ namespace AutoGame
         {
             Task.Run(() =>
             {
-                var list = new List<string> { "luadoc", "sung" };
+                var list = new List<string> { "luadoc", "sung", "danhtay", "LenXuong" };
 
                 this.Invoke((MethodInvoker)(() =>
                 {
@@ -102,6 +102,7 @@ namespace AutoGame
             int s = 0;
             int isJump_left = 0;
             var sCounter = 0;
+            int jump = int.Parse(Jump.Text);
             if (selected == "luadoc")
             {
                 for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
@@ -114,10 +115,176 @@ namespace AutoGame
                     s++;
 
                     // Tạo combo theo yêu cầu 
-                    int jumpRightCount = rand.Next(2, 3); // 4–8
-                    int wCount = rand.Next(3, 4);         // 4–6
-                    int qCount = rand.Next(3, 4);         // 4–6
+                    int jumpRightCount = rand.Next(jump, jump); // 4–8
+                    int wCount = rand.Next(9, 12);         // 4–6
+                    //int qCount = rand.Next(3, 4);         // 4–6
 
+                    List<string> combo = new List<string>();
+
+                    // Thêm JUMP_RIGHT
+                    if (isJump_left % 2 == 1)
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                        {
+                            combo.Add("JUMP_RIGHT");
+                            combo.Add("w");
+                            combo.Add("w");
+                        }
+                        isJump_left++;
+                    }
+                    else
+                    {
+                        for (int i = 0; i < jumpRightCount; i++)
+                        {
+                            combo.Add("JUMP_LEFT");
+                            combo.Add("w");
+                            combo.Add("w");
+                        }
+                        isJump_left++;
+                    }
+
+                    // Thêm w
+                    //for (int i = 0; i < wCount; i++)
+                    //combo.Add("w");
+
+
+                    // Thêm q
+                    //for (int i = 0; i < qCount; i++)
+                    //    combo.Add("q");
+
+                    // Trộn ngẫu nhiên thứ tự combo
+
+                    sCounter++;
+                    if (sCounter == 10)
+                    {
+                        combo.Add("S");
+                        combo.Add("A");
+                        combo.Add("D");
+                        combo.Add("F");
+                        sCounter = 0;
+                    }
+                    combo = combo.OrderBy(x => rand.Next()).ToList();
+                    foreach (var key in combo)
+                    {
+                        if (isCancelled)
+                        {
+                            port.Close();
+                            break;
+                        }
+                        // Thỉnh thoảng chèn "s"
+
+                        int delay = rand.Next(200, 400); // delay ngẫu nhiên 0.5–1s
+                        Thread.Sleep(delay);
+                        port.WriteLine(key);
+                        Console.WriteLine(">> Sent: " + key);
+                        if (key == "A" || key == "S" || key == "D" || key == "F") Thread.Sleep(1000);
+                        actions.Add(key);
+                    }
+
+                    Thread.Sleep(100); // giữ nhịp vòng lặp đủ chậm để đồng hồ hoạt động chính xác
+                }
+
+            }
+            else if (selected == "LenXuong")
+            {
+                for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
+                {
+                    if (isCancelled)
+                    {
+                        port.Close();
+                        break;
+                    }
+                    s++;
+
+                    // Tạo combo theo yêu cầu 
+                    int jumpRightCount = rand.Next(jump, jump); // 4–8
+                    int wCount = rand.Next(2, 3);         // 4–6
+                    //int qCount = rand.Next(3, 4);         // 4–6
+
+                    List<string> combo = new List<string>();
+
+                    // Thêm JUMP_RIGHT
+                    for (int i = 0; i < jumpRightCount; i++)
+                    {
+                        // Hit LEFT x2
+                        combo.Add("LEFT");
+                        for (int j1 = 0; j1 < wCount; j1++)
+                            combo.Add("w");
+
+
+                        // Hit RIGHT x2
+                        combo.Add("RIGHT");
+                        for (int j2 = 0; j2 < wCount; j2++)
+                            combo.Add("w");
+
+
+
+                        // Alternate jump
+                        if (isJump_left % 2 == 1)
+                            combo.Add("JUMP_DOWN");
+
+                        else
+                            combo.Add("JUMP_UP");
+
+                        isJump_left++;
+                    }
+                    
+                    
+                    // Thêm w
+                    //for (int i = 0; i < wCount; i++)
+                    //combo.Add("w");
+
+
+                    // Thêm q
+                    //for (int i = 0; i < qCount; i++)
+                    //    combo.Add("q");
+
+                    // Trộn ngẫu nhiên thứ tự combo
+
+                    sCounter++;
+                    if (sCounter == 15)
+                    {
+                        combo.Add("S");
+                        combo.Add("A");
+                        combo.Add("D");
+                        combo.Add("F");
+                        sCounter = 0;
+                    }
+                    combo = combo.OrderBy(x => rand.Next()).ToList();
+                    foreach (var key in combo)
+                    {
+                        if (isCancelled)
+                        {
+                            port.Close();
+                            break;
+                        }
+                        // Thỉnh thoảng chèn "s"
+
+                        int delay = rand.Next(300, 500); // delay ngẫu nhiên 0.5–1s
+                        Thread.Sleep(delay);
+                        port.WriteLine(key);
+                        if (key == "A" || key == "S" || key == "D" || key == "F") Thread.Sleep(1000);
+                        Console.WriteLine(">> Sent: " + key);
+                    }
+
+                    Thread.Sleep(200); // giữ nhịp vòng lặp đủ chậm để đồng hồ hoạt động chính xác
+                }
+
+            }
+            else if (selected == "danhtay")
+            {
+                for (int j = 1; j <= int.Parse(domainUpDown1.Text); j++)
+                {
+                    if (isCancelled)
+                    {
+                        port.Close();
+                        break;
+                    }
+                    s++;
+
+                    // Tạo combo theo yêu cầu 
+                    int jumpRightCount = rand.Next(1, 1); // 4–8
+                    int wCount = rand.Next(2, 2);         // 4–6
                     List<string> combo = new List<string>();
 
                     // Thêm JUMP_RIGHT
@@ -133,26 +300,20 @@ namespace AutoGame
                             combo.Add("JUMP_LEFT");
                         isJump_left++;
                     }
-
-                    // Thêm w
-                    for (int i = 0; i < wCount; i++)
-                        combo.Add("w");
-
-                    // Thêm q
-                    for (int i = 0; i < qCount; i++)
-                        combo.Add("q");
-
-                    // Trộn ngẫu nhiên thứ tự combo
-
                     sCounter++;
-                    if (sCounter == 1)
+                    if (sCounter == 5)
                     {
                         combo.Add("s");
-                        combo.Add("JUMP_UP");
                         combo.Add("A");
                         combo.Add("D");
                         sCounter = 0;
                     }
+                    // Thêm w
+                    for (int i = 0; i < wCount; i++)
+                        combo.Add("w");
+
+                    // Trộn ngẫu nhiên thứ tự combo
+
                     combo = combo.OrderBy(x => rand.Next()).ToList();
                     foreach (var key in combo)
                     {
@@ -163,10 +324,11 @@ namespace AutoGame
                         }
                         // Thỉnh thoảng chèn "s"
 
-                        int delay = rand.Next(500, 700); // delay ngẫu nhiên 0.5–1s
+                        int delay = rand.Next(300, 300); // delay ngẫu nhiên 0.5–1s
                         Thread.Sleep(delay);
                         port.WriteLine(key);
                         Console.WriteLine(">> Sent: " + key);
+                        if (key == "A" || key == "S" || key == "D") Thread.Sleep(1000);
                         actions.Add(key);
                     }
 
@@ -195,10 +357,11 @@ namespace AutoGame
                     // Thêm JUMP_RIGHT
                     if (isJump_left % 2 == 1)
                     {
-                        for (int i = 0; i < jumpRightCount; i++) {
+                        for (int i = 0; i < jumpRightCount; i++)
+                        {
                             combo.Add("JUMP_RIGHT_SUNG");
                         }
-                            
+
                         isJump_left++;
                     }
                     else
@@ -207,7 +370,7 @@ namespace AutoGame
                         {
                             combo.Add("JUMP_LEFT_SUNG");
                         }
-                            
+
                         isJump_left++;
                     }
 
@@ -244,7 +407,7 @@ namespace AutoGame
                         Thread.Sleep(delay);
                         port.WriteLine(key);
                         Console.WriteLine(">> Sent: " + key);
-                        if (key == "A" || key=="S"|| key=="D") Thread.Sleep(1000);
+                        if (key == "A" || key == "S" || key == "D") Thread.Sleep(1000);
                         actions.Add(key);
                     }
 
@@ -254,7 +417,8 @@ namespace AutoGame
             }
 
             port.Close();
-            this.Invoke((MethodInvoker)delegate {
+            this.Invoke((MethodInvoker)delegate
+            {
                 button1.Enabled = true;
                 button3.Enabled = false;
             });
@@ -299,6 +463,16 @@ namespace AutoGame
 
             string json = JsonConvert.SerializeObject(rows, Newtonsoft.Json.Formatting.Indented);
             File.WriteAllText(filePath, json);
+        }
+
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void label2_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
