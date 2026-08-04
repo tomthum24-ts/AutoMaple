@@ -2,14 +2,31 @@ using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace AutoCheckBox
 {
+    public class QuestionItem
+    {
+        public string question { get; set; } = "";
+        public string answer { get; set; } = "";
+        public string option { get; set; } = "";
+    }
+
+    public class OcrLineInfo
+    {
+        public string Text { get; set; } = "";
+        public double Y { get; set; }
+    }
+
     public partial class Form1 : Form
     {
         private CancellationTokenSource? _cts;
@@ -109,6 +126,232 @@ namespace AutoCheckBox
             txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
         }
 
+        private void btnOpenQABank_Click(object sender, EventArgs e)
+        {
+            using var qaForm = new QABankForm();
+            qaForm.ShowDialog(this);
+        }
+
+        private List<QuestionItem> LoadQuestionBank()
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string path = Path.Combine(baseDir, "questions.json");
+
+            if (!File.Exists(path))
+            {
+                string? altPath = FindTemplateFile("questions.json");
+                if (!string.IsNullOrEmpty(altPath)) path = altPath;
+            }
+
+            if (!File.Exists(path)) return new List<QuestionItem>();
+
+            try
+            {
+                string json = File.ReadAllText(path);
+                var items = JsonSerializer.Deserialize<List<QuestionItem>>(json);
+                return items ?? new List<QuestionItem>();
+            }
+            catch
+            {
+                return new List<QuestionItem>();
+            }
+        }
+
+        private async Task<(string FullText, List<OcrLineInfo> Lines)> PerformOcrDetailedAsync(Bitmap bitmap)
+        {
+            var linesInfo = new List<OcrLineInfo>();
+            try
+            {
+                using var stream = new MemoryStream();
+                bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Bmp);
+                stream.Position = 0;
+
+                var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
+                using var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+
+                var ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages() ??
+                                 Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("en-US"));
+
+                if (ocrEngine == null) return (string.Empty, linesInfo);
+
+                var result = await ocrEngine.RecognizeAsync(softwareBitmap);
+                int screenHeight = bitmap.Height;
+
+                foreach (var line in result.Lines)
+                {
+                    double minY = double.MaxValue;
+                    foreach (var word in line.Words)
+                    {
+                        if (word.BoundingRect.Y < minY) minY = word.BoundingRect.Y;
+                    }
+
+                    // 🎯 Lọc bỏ nhiễu: Loại các dòng chữ nằm ở thanh tab/URL trình duyệt (Y < 80px) và Taskbar ở đáy (Y > Height - 50px)
+                    double realY = minY == double.MaxValue ? 0 : minY;
+                    if (realY >= 80 && realY <= (screenHeight - 50))
+                    {
+                        linesInfo.Add(new OcrLineInfo { Text = line.Text, Y = realY });
+                    }
+                }
+
+                string filteredFullText = string.Join(" ", linesInfo.Select(l => l.Text));
+                return (filteredFullText, linesInfo);
+            }
+            catch
+            {
+                return (string.Empty, linesInfo);
+            }
+        }
+
+        // 🔍 BỘ THUẬT TOÁN SO KHỚP GẦN ĐÚNG & KHẮC PHỤC LỖI PHÔNG CHỮ OCR DỰ THI
+        private static string RemoveVietnameseAccents(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+
+            string normalized = text.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+
+            foreach (char c in normalized)
+            {
+                var uc = CharUnicodeInfo.GetUnicodeCategory(c);
+                if (uc != UnicodeCategory.NonSpacingMark)
+                {
+                    sb.Append(c);
+                }
+            }
+
+            return sb.ToString().Normalize(NormalizationForm.FormC)
+                     .Replace("đ", "d").Replace("Đ", "D");
+        }
+
+        private static string NormalizeOcrFontErrors(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+
+            string unaccented = RemoveVietnameseAccents(text).ToLowerInvariant();
+
+            // Sửa triệt để các sai sót phông chữ OCR mã Telex/Châu Âu (dd -> d, ü -> u, ö -> o, å -> a, etc.)
+            unaccented = unaccented.Replace("dd", "d")
+                                   .Replace("ü", "u").Replace("ü", "u").Replace("û", "u").Replace("Ü", "u")
+                                   .Replace("ö", "o").Replace("ô", "o").Replace("ö", "o").Replace("Ö", "o")
+                                   .Replace("å", "a").Replace("ä", "a").Replace("å", "a").Replace("Å", "a")
+                                   .Replace("hifdng", "huong").Replace("hifng", "huong").Replace("hddng", "huong")
+                                   .Replace("durgc", "duoc").Replace("dugc", "duoc")
+                                   .Replace("khöng", "khong")
+                                   .Replace("tén", "ten").Replace("müi", "mui").Replace("nhÜng", "nhung");
+
+            var cleanSb = new StringBuilder();
+            foreach (char c in unaccented)
+            {
+                if (char.IsLetterOrDigit(c) || char.IsWhiteSpace(c))
+                {
+                    cleanSb.Append(c);
+                }
+                else
+                {
+                    cleanSb.Append(' ');
+                }
+            }
+
+            return cleanSb.ToString();
+        }
+
+        private static List<string> ExtractWordTokens(string text)
+        {
+            string normalized = NormalizeOcrFontErrors(text);
+            string[] words = normalized.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            return words.Where(w => w.Length >= 2).ToList();
+        }
+
+        private static double CalculateWordTokenOverlapScore(string text1, string text2)
+        {
+            var words1 = ExtractWordTokens(text1);
+            var words2 = ExtractWordTokens(text2);
+
+            if (words1.Count == 0 || words2.Count == 0) return 0;
+
+            int matchCount = 0;
+            var copy2 = new List<string>(words2);
+
+            foreach (var w1 in words1)
+            {
+                int idx = copy2.FindIndex(w2 => w2 == w1 || (w1.Length >= 3 && w2.Length >= 3 && (w1.Contains(w2) || w2.Contains(w1))));
+                if (idx >= 0)
+                {
+                    matchCount++;
+                    copy2.RemoveAt(idx);
+                }
+            }
+
+            double ratio1 = (double)matchCount / words1.Count;
+            double ratio2 = (double)matchCount / words2.Count;
+
+            return Math.Max(ratio1, ratio2);
+        }
+
+        private static double CalculateFuzzySimilarity(string str1, string str2)
+        {
+            string s1 = NormalizeOcrFontErrors(str1).Replace(" ", "");
+            string s2 = NormalizeOcrFontErrors(str2).Replace(" ", "");
+
+            if (string.IsNullOrEmpty(s1) || string.IsNullOrEmpty(s2)) return 0;
+            if (s1 == s2) return 1.0;
+
+            if (s1.Contains(s2) || s2.Contains(s1)) return 0.95;
+
+            var chunks1 = ChunkString(s1, 3);
+            var chunks2 = ChunkString(s2, 3);
+
+            int intersectCount = chunks1.Count(w => chunks2.Contains(w));
+            int unionCount = chunks1.Union(chunks2).Count();
+            double chunkScore = unionCount == 0 ? 0 : (double)intersectCount / unionCount;
+
+            double tokenOverlapScore = CalculateWordTokenOverlapScore(str1, str2);
+
+            return Math.Max(chunkScore, tokenOverlapScore);
+        }
+
+        private static HashSet<string> ChunkString(string str, int chunkSize)
+        {
+            var set = new HashSet<string>();
+            if (str.Length < chunkSize)
+            {
+                set.Add(str);
+                return set;
+            }
+            for (int i = 0; i <= str.Length - chunkSize; i++)
+            {
+                set.Add(str.Substring(i, chunkSize));
+            }
+            return set;
+        }
+
+        private QuestionItem? MatchQuestionInBank(string recognizedText, List<QuestionItem> qBank, double minSimilarity = 0.35)
+        {
+            if (string.IsNullOrWhiteSpace(recognizedText) || qBank.Count == 0) return null;
+
+            QuestionItem? bestMatch = null;
+            double bestScore = 0;
+
+            foreach (var q in qBank)
+            {
+                if (string.IsNullOrWhiteSpace(q.question)) continue;
+
+                double score = CalculateFuzzySimilarity(recognizedText, q.question);
+                if (score > bestScore && score >= minSimilarity)
+                {
+                    bestScore = score;
+                    bestMatch = q;
+                }
+            }
+
+            if (bestMatch != null)
+            {
+                Log($"🔍 [Fuzzy Match] Khớp xấp xỉ câu hỏi thành công! Độ khớp: {(int)(bestScore * 100)}%");
+            }
+
+            return bestMatch;
+        }
+
         private void UpdateUIState(bool isRunning)
         {
             btnStart.Enabled = !isRunning;
@@ -141,15 +384,16 @@ namespace AutoCheckBox
             bool autoNext = chkAutoNext.Checked;
             bool autoScroll = chkAutoScroll.Checked;
             int scrollY = (int)numScrollY.Value;
+            bool useQABank = chkUseQABank.Checked;
             string selectedOption = GetSelectedOptionName();
 
             string delayInfo = isRandomDelay ? $"Random {delayMin}-{delayMax}ms" : $"{delayMin}ms";
-            Log($"📋 Lựa chọn: [{selectedOption}] | Delay: {delayInfo} | Auto Next: {autoNext} | Scroll Trước: {autoScroll} ({scrollY}px)");
+            Log($"📋 Lựa chọn: [{selectedOption}] | Q&A Bank: {useQABank} | Delay: {delayInfo} | Auto Next: {autoNext}");
 
             try
             {
                 var token = _cts.Token;
-                await Task.Run(() => RunAutoQuizSolverAsync(selectedOption, isRandomDelay, delayMin, delayMax, maxQuestions, autoNext, autoScroll, scrollY, token), token);
+                await Task.Run(() => RunAutoQuizSolverAsync(selectedOption, useQABank, isRandomDelay, delayMin, delayMax, maxQuestions, autoNext, autoScroll, scrollY, token), token);
                 if (!token.IsCancellationRequested)
                 {
                     Log("🎉 ===== HOÀN THÀNH CHUỖI CÁC LẦN THI =====");
@@ -299,9 +543,14 @@ namespace AutoCheckBox
             return filteredPoints;
         }
 
-        private async Task RunAutoQuizSolverAsync(string optionChoice, bool isRandomDelay, int delayMin, int delayMax, int maxQuestions, bool autoNext, bool autoScroll, int scrollY, CancellationToken token)
+        private async Task RunAutoQuizSolverAsync(string optionChoice, bool useQABank, bool isRandomDelay, int delayMin, int delayMax, int maxQuestions, bool autoNext, bool autoScroll, int scrollY, CancellationToken token)
         {
             int totalExamsCompleted = 0;
+            var qBank = useQABank ? LoadQuestionBank() : new List<QuestionItem>();
+            if (useQABank)
+            {
+                Log($"📚 Đã nạp {qBank.Count} câu hỏi từ ngân hàng câu hỏi (questions.json).");
+            }
 
             int GetNextDelay()
             {
@@ -334,28 +583,36 @@ namespace AutoCheckBox
 
                     Log($"\n📝 --- Đang xử lý câu thứ #{questionCounter} (Lần thi #{totalExamsCompleted}) ---");
 
-                    // 1️⃣ Tự động cuộn xuống TRƯỚC khi chọn đáp án (nếu bật Auto Scroll)
+                    // 1️⃣ BƯỚC 1: TỰ ĐỘNG CUỘN MÀN HÌNH XUỐNG ĐẦU TIÊN (Scroll Down FIRST)
                     if (autoScroll)
                     {
                         token.ThrowIfCancellationRequested();
                         Log($"📜 [1] Cuộn màn hình xuống {scrollY}px trước...");
                         ScrollDown(scrollY);
-                        await Task.Delay(250, token);
+
+                        // ⏳ Chờ 500ms để trình duyệt cuộn mượt và dừng vị trí hoàn toàn ổn định
+                        await Task.Delay(500, token);
                     }
 
-                    // 2️⃣ Tìm file mẫu cho đáp án (Ưu tiên file riêng A/B/C/D, nếu không có thì dùng checkbox_unchecked)
-                    string? templatePathOption = null;
-                    string currentTargetOption = optionChoice;
+                    // 2️⃣ BƯỚC 2: SAU KHI ĐÃ CUỘN XUỐNG DỪNG HẲN MỚI CHỤP MÀN HÌNH & ĐỌC TEXT OCR!
+                    token.ThrowIfCancellationRequested();
+                    string screenPath = CaptureScreen();
 
-                    if (optionChoice == "RANDOM")
+                    string currentTargetOption = optionChoice;
+                    int forcedChoiceIndex = -1;
+                    double matchedChoiceY = -1;
+                    bool skipAnswerClick = false;
+
+                    string? templatePathOption = null;
+                    if (currentTargetOption == "RANDOM")
                     {
                         string[] options = { "A", "B", "C", "D" };
-                        currentTargetOption = options[_rand.Next(options.Length)];
-                        templatePathOption = FindTemplateFile(currentTargetOption, $"option_{currentTargetOption}");
+                        string randOpt = options[_rand.Next(options.Length)];
+                        templatePathOption = FindTemplateFile(randOpt, $"option_{randOpt}");
                     }
                     else
                     {
-                        templatePathOption = FindTemplateFile(optionChoice, $"option_{optionChoice}");
+                        templatePathOption = FindTemplateFile(currentTargetOption, $"option_{currentTargetOption}");
                     }
 
                     if (string.IsNullOrEmpty(templatePathOption))
@@ -363,45 +620,153 @@ namespace AutoCheckBox
                         templatePathOption = FindTemplateFile("checkbox_unchecked", "A", "option_A", "radio");
                     }
 
-                    if (string.IsNullOrEmpty(templatePathOption))
-                    {
-                        Log($"❌ Không tìm thấy bất kỳ file ảnh mẫu đáp án nào!");
-                        return;
-                    }
+                    var optionPoints = !string.IsNullOrEmpty(templatePathOption)
+                        ? FindMatchingPoints(screenPath, templatePathOption)
+                        : new List<OpenCvSharp.Point>();
 
-                    // 3️⃣ Chụp màn hình & tìm điểm đáp án (SAU KHI ĐÃ CUỘN XUỐNG)
-                    token.ThrowIfCancellationRequested();
-                    string screenPath = CaptureScreen();
-                    var optionPoints = FindMatchingPoints(screenPath, templatePathOption);
+                    optionPoints.Sort((p1, p2) => p1.Y.CompareTo(p2.Y));
+                    double firstCheckboxY = optionPoints.Count > 0 ? optionPoints[0].Y : double.MaxValue;
 
-                    if (optionPoints.Count == 0)
+                    // 3️⃣ BƯỚC 3: ĐỌC TEXT OCR TRÊN MÀN HÌNH MỚI ĐÃ CUỘN
+                    if (useQABank && qBank.Count > 0)
                     {
-                        Log($"⚠️ Không tìm thấy đáp án trên màn hình hiện tại.");
-                    }
-                    else
-                    {
-                        optionPoints.Sort((p1, p2) => p1.Y.CompareTo(p2.Y));
-
-                        int selectedIndex = 0;
-                        if (optionChoice == "RANDOM")
+                        try
                         {
-                            selectedIndex = _rand.Next(optionPoints.Count);
-                            string[] optionLabels = { "A", "B", "C", "D" };
-                            string label = selectedIndex < optionLabels.Length ? optionLabels[selectedIndex] : $"#{selectedIndex + 1}";
-                            Log($"🎲 Chọn ngẫu nhiên đáp án [{label}] (vị trí {selectedIndex + 1}/{optionPoints.Count})");
+                            using var bmp = new Bitmap(screenPath);
+                            var (ocrText, ocrLines) = await PerformOcrDetailedAsync(bmp);
+
+                            var questionLinesAbove = ocrLines.Where(l => l.Y < firstCheckboxY).Select(l => l.Text).ToList();
+                            string questionTextAbove = string.Join(" ", questionLinesAbove).Trim();
+
+                            if (!string.IsNullOrWhiteSpace(questionTextAbove))
+                            {
+                                Log($"📖 [OCR Câu Hỏi (Sau khi cuộn)]: \"{questionTextAbove}\"");
+                            }
+                            else if (!string.IsNullOrWhiteSpace(ocrText))
+                            {
+                                string cleanPreview = ocrText.Replace("\r", " ").Replace("\n", " ").Trim();
+                                while (cleanPreview.Contains("  ")) cleanPreview = cleanPreview.Replace("  ", " ");
+                                if (cleanPreview.Length > 150) cleanPreview = cleanPreview.Substring(0, 150) + "...";
+                                Log($"📖 [OCR Màn hình (Sau khi cuộn)]: \"{cleanPreview}\"");
+                                questionTextAbove = ocrText;
+                            }
+                            else
+                            {
+                                Log("📖 [OCR Màn hình]: (Không nhận diện được văn bản)");
+                            }
+
+                            // 🔍 SO KHỚP GẦN ĐÚNG VÀ TRÍCH XUẤT TỪ KHÓA CHỐNG SAI LỖI PHÔNG CHỮ OCR
+                            var matchedQ = MatchQuestionInBank(questionTextAbove, qBank, 0.35);
+                            if (matchedQ == null && !string.IsNullOrWhiteSpace(ocrText))
+                            {
+                                matchedQ = MatchQuestionInBank(ocrText, qBank, 0.35);
+                            }
+
+                            if (matchedQ != null)
+                            {
+                                Log($"🧠 [AI/OCR] Nhận diện câu hỏi thành công: \"{matchedQ.question.Trim()}\"");
+
+                                if (!string.IsNullOrWhiteSpace(matchedQ.option))
+                                {
+                                    string opt = matchedQ.option.Trim().ToUpperInvariant();
+                                    currentTargetOption = opt;
+
+                                    if (opt == "A") forcedChoiceIndex = 0;
+                                    else if (opt == "B") forcedChoiceIndex = 1;
+                                    else if (opt == "C") forcedChoiceIndex = 2;
+                                    else if (opt == "D") forcedChoiceIndex = 3;
+
+                                    Log($"🎯 [Q&A Bank] Tìm thấy đáp án chuẩn theo chữ cái: [{opt}]");
+                                }
+
+                                if (forcedChoiceIndex < 0 && !string.IsNullOrWhiteSpace(matchedQ.answer) && ocrLines.Count > 0)
+                                {
+                                    double maxAnsScore = 0;
+                                    int bestLineIdx = -1;
+
+                                    for (int i = 0; i < ocrLines.Count; i++)
+                                    {
+                                        double score = CalculateFuzzySimilarity(ocrLines[i].Text, matchedQ.answer);
+                                        if (score > maxAnsScore && score >= 0.30)
+                                        {
+                                            maxAnsScore = score;
+                                            bestLineIdx = i;
+                                        }
+                                    }
+
+                                    if (bestLineIdx >= 0)
+                                    {
+                                        matchedChoiceY = ocrLines[bestLineIdx].Y;
+                                        forcedChoiceIndex = -2;
+                                        Log($"🎯 [Q&A Bank] Khớp xấp xỉ chữ đáp án \"{matchedQ.answer}\" với dòng OCR \"{ocrLines[bestLineIdx].Text}\" (Y={matchedChoiceY}, Độ khớp: {(int)(maxAnsScore * 100)}%)");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Log($"ℹ️ [OCR] Không thấy câu hỏi trong ngân hàng ➔ Bấm 'Tiếp tục' để qua câu tiếp theo!");
+                                skipAnswerClick = true;
+                            }
                         }
-                        else if (optionChoice == "A") selectedIndex = 0;
-                        else if (optionChoice == "B") selectedIndex = Math.Min(1, optionPoints.Count - 1);
-                        else if (optionChoice == "C") selectedIndex = Math.Min(2, optionPoints.Count - 1);
-                        else if (optionChoice == "D") selectedIndex = Math.Min(3, optionPoints.Count - 1);
+                        catch
+                        {
+                            Log($"ℹ️ [OCR] Lỗi nhận diện ➔ Bấm 'Tiếp tục' để qua câu!");
+                            skipAnswerClick = true;
+                        }
+                    }
 
-                        using var tmplOpt = Cv2.ImRead(templatePathOption, ImreadModes.Color);
-                        var pt = optionPoints[selectedIndex];
-                        int clickX = pt.X + tmplOpt.Width / 2;
-                        int clickY = pt.Y + tmplOpt.Height / 2;
+                    // 4️⃣ Tìm vị trí các đáp án trên màn hình & Click đáp án chính xác (Nếu không bị bỏ qua)
+                    if (!skipAnswerClick)
+                    {
+                        if (optionPoints.Count == 0)
+                        {
+                            Log($"⚠️ Không tìm thấy ô đáp án trên màn hình hiện tại ➔ Bấm 'Tiếp tục' để qua câu!");
+                        }
+                        else
+                        {
+                            int selectedIndex = 0;
 
-                        Log($"🖱️ [2] Click chọn đáp án tại ({clickX}, {clickY})");
-                        ClickAt(clickX, clickY);
+                            if (forcedChoiceIndex >= 0)
+                            {
+                                selectedIndex = Math.Min(forcedChoiceIndex, optionPoints.Count - 1);
+                            }
+                            else if (forcedChoiceIndex == -2 && matchedChoiceY > 0)
+                            {
+                                int bestIdx = 0;
+                                double minDiff = double.MaxValue;
+                                for (int i = 0; i < optionPoints.Count; i++)
+                                {
+                                    double diff = Math.Abs(optionPoints[i].Y - matchedChoiceY);
+                                    if (diff < minDiff)
+                                    {
+                                        minDiff = diff;
+                                        bestIdx = i;
+                                    }
+                                }
+                                selectedIndex = bestIdx;
+                                Log($"🎯 Tự động khớp ô chọn thứ #{selectedIndex + 1} khớp với văn bản đáp án.");
+                            }
+                            else if (currentTargetOption == "RANDOM")
+                            {
+                                selectedIndex = _rand.Next(optionPoints.Count);
+                                string[] optionLabels = { "A", "B", "C", "D" };
+                                string label = selectedIndex < optionLabels.Length ? optionLabels[selectedIndex] : $"#{selectedIndex + 1}";
+                                Log($"🎲 Chọn ngẫu nhiên đáp án [{label}] (vị trí {selectedIndex + 1}/{optionPoints.Count})");
+                            }
+                            else if (currentTargetOption == "A") selectedIndex = 0;
+                            else if (currentTargetOption == "B") selectedIndex = Math.Min(1, optionPoints.Count - 1);
+                            else if (currentTargetOption == "C") selectedIndex = Math.Min(2, optionPoints.Count - 1);
+                            else if (currentTargetOption == "D") selectedIndex = Math.Min(3, optionPoints.Count - 1);
+
+                            selectedIndex = Math.Clamp(selectedIndex, 0, optionPoints.Count - 1);
+                            using var tmplOpt = Cv2.ImRead(templatePathOption!, ImreadModes.Color);
+                            var pt = optionPoints[selectedIndex];
+                            int clickX = pt.X + tmplOpt.Width / 2;
+                            int clickY = pt.Y + tmplOpt.Height / 2;
+
+                            Log($"🖱️ [2] Click chọn đáp án tại ({clickX}, {clickY})");
+                            ClickAt(clickX, clickY);
+                        }
                     }
 
                     int delayMs = GetNextDelay();
@@ -409,7 +774,7 @@ namespace AutoCheckBox
                     token.ThrowIfCancellationRequested();
                     await Task.Delay(delayMs, token);
 
-                    // 4️⃣ Tự động bấm nút "Câu tiếp theo" (Next) hoặc "Kết thúc bài thi" (Finish / Submit)
+                    // 5️⃣ Tự động bấm nút "Câu tiếp theo" (Next) hoặc "Kết thúc bài thi" (Finish / Submit)
                     if (autoNext)
                     {
                         token.ThrowIfCancellationRequested();
@@ -438,7 +803,6 @@ namespace AutoCheckBox
 
                         if (!clickedNext)
                         {
-                            // Kiểm tra nếu có nút "Kết thúc bài thi" / "Nộp bài" trên màn hình
                             string? templatePathFinish = FindTemplateFile("finish", "submit", "ket_thuc", "nop_bai", "finish_exam", "btn_finish", "btn_submit");
 
                             if (!string.IsNullOrEmpty(templatePathFinish))
@@ -456,13 +820,29 @@ namespace AutoCheckBox
                                     Log($"🏆 [4] Tìm thấy nút KẾT THÚC BÀI THI tại ({clickX}, {clickY}) ➔ Click Nộp bài!");
                                     ClickAt(clickX, clickY);
                                     Log($"🎉 Lần thi #{totalExamsCompleted} đã hoàn tất!");
-                                    examFinished = true; // Kết thúc lần thi hiện tại
+                                    examFinished = true;
                                     break;
                                 }
                             }
 
                             Log("⌨️ Không tìm thấy ảnh nút Next/Kết thúc ➔ Gửi phím ENTER.");
                             PressEnterKey();
+
+                            // 💡 Kiểm tra ngay sau khi ấn ENTER xem màn hình đã chuyển sang trang Kết quả có nút "Luyện tất cả" chưa!
+                            await Task.Delay(1000, token);
+                            string? templatePathRetakeCheck = FindTemplateFile("luyen_tat_ca", "practice_all", "luyen_lai", "retake", "retry", "restart", "lam_lai", "btn_practice");
+
+                            if (!string.IsNullOrEmpty(templatePathRetakeCheck))
+                            {
+                                string checkScreen = CaptureScreen();
+                                var retakePointsCheck = FindMatchingPoints(checkScreen, templatePathRetakeCheck);
+                                if (retakePointsCheck.Count > 0)
+                                {
+                                    Log($"🏆 Ấn ENTER thành công ➔ Đã hoàn thành lần thi #{totalExamsCompleted}!");
+                                    examFinished = true;
+                                    break;
+                                }
+                            }
                         }
 
                         int nextDelayMs = GetNextDelay();
@@ -473,7 +853,7 @@ namespace AutoCheckBox
                 }
 
                 // ==============================================================
-                // 5️⃣ Tự động bấm nút "Luyện tất cả" / "Luyện lại" để lặp lại lần thi mới
+                // 6️⃣ Tự động bấm nút "Luyện tất cả" / "Luyện lại" để lặp lại lần thi mới
                 // ==============================================================
                 if (token.IsCancellationRequested) break;
 
